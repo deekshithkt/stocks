@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pattern Recognition Candlestick Chart</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #chart-container {
+            width: 80%;
+            margin: 20px auto;
+            position: relative;
+        }
+        #chart {
+            width: 100%;
+            height: 80vh;
+            border-radius: 10px;
+            background-color: #1a1a1a;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #fullscreen-btn, #theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #ff9800;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #fullscreen-btn {
+            right: 100px;
+        }
+        #fullscreen-btn:hover, #theme-toggle:hover {
+            background-color: #f57c00;
+        }
+        .light-theme {
+            background-color: #ffffff;
+            color: #000;
+        }
+        .light-theme #chart {
+            background-color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="fullscreen-btn">Fullscreen</button>
+    <button id="theme-toggle">Switch to Dark Mode</button>
+
+    <div id="chart-container">
+        <div id="chart"></div>
+    </div>
+
+    <script>
+        async function loadCSVData() {
+            const response = await fetch("ADANIPORTS.csv");
+            const text = await response.text();
+
+            let rows = text.split("\n").slice(1);
+            let dates = [], openPrices = [], highPrices = [], lowPrices = [], closePrices = [], volumes = [];
+
+            rows.forEach(row => {
+                let cols = row.split(",");
+                if (cols.length < 10) return;
+
+                let date = cols[0].trim();
+                let open = parseFloat(cols[4]);
+                let high = parseFloat(cols[5]);
+                let low = parseFloat(cols[6]);
+                let close = parseFloat(cols[8]);
+                let volume = parseInt(cols[10]);
+
+                dates.push(date);
+                openPrices.push(open);
+                highPrices.push(high);
+                lowPrices.push(low);
+                closePrices.push(close);
+                volumes.push(volume);
+            });
+
+            plotChart(dates, openPrices, highPrices, lowPrices, closePrices, volumes);
+        }
+
+        function plotChart(dates, openPrices, highPrices, lowPrices, closePrices, volumes) {
+            const candlestickTrace = {
+                x: dates,
+                open: openPrices,
+                high: highPrices,
+                low: lowPrices,
+                close: closePrices,
+                type: 'candlestick',
+                name: 'Stock Price',
+                increasing: { line: { color: '#26a69a' }, fillcolor: 'rgba(38, 166, 154, 0.3)' },
+                decreasing: { line: { color: '#ef5350' }, fillcolor: 'rgba(239, 83, 80, 0.3)' }
+            };
+
+            const volumeTrace = {
+                x: dates,
+                y: volumes,
+                type: 'bar',
+                name: 'Volume',
+                marker: { color: '#474747' },
+                yaxis: 'y2'
+            };
+
+            const layout = {
+                title: 'Stock Candlestick Chart with Pattern Recognition',
+                xaxis: { title: 'Date', showgrid: true, gridcolor: '#333333' },
+                yaxis: { title: 'Price', showgrid: true, gridcolor: '#333333' },
+                yaxis2: {
+                    title: 'Volume',
+                    overlaying: 'y',
+                    side: 'right',
+                    showgrid: false
+                },
+                plot_bgcolor: "#1a1a1a",
+                paper_bgcolor: "#121212",
+                dragmode: 'select',
+                transition: { duration: 300, easing: "cubic-in-out" }
+            };
+
+            Plotly.newPlot('chart', [candlestickTrace, volumeTrace], layout);
+            enablePatternRecognition(dates, openPrices, highPrices, lowPrices, closePrices);
+        }
+
+        function enablePatternRecognition(dates, openPrices, highPrices, lowPrices, closePrices) {
+            let selectedIndices = [];
+
+            document.getElementById('chart').on('plotly_selected', function(eventData) {
+                if (!eventData) return;
+
+                selectedIndices = eventData.points.map(p => dates.indexOf(p.x));
+                let selectedPattern = selectedIndices.map(idx => closePrices[idx]);
+                let matchIndices = findSimilarPatterns(selectedPattern, closePrices);
+
+                let highlightTrace = {
+                    x: [],
+                    open: [],
+                    high: [],
+                    low: [],
+                    close: [],
+                    type: 'candlestick',
+                    name: 'Pattern Matches',
+                    increasing: { line: { color: '#2962ff', width: 2 } },
+                    decreasing: { line: { color: '#2962ff', width: 2 } }
+                };
+
+                // Exclude selected candles from matching
+                matchIndices.forEach(idx => {
+                    if (!selectedIndices.includes(idx)) {
+                        highlightTrace.x.push(dates[idx]);
+                        highlightTrace.open.push(openPrices[idx]);
+                        highlightTrace.high.push(highPrices[idx]);
+                        highlightTrace.low.push(lowPrices[idx]);
+                        highlightTrace.close.push(closePrices[idx]);
+                    }
+                });
+
+                // Update chart with highlighted patterns
+                Plotly.animate('chart', {
+                    data: [highlightTrace],
+                    traces: [1],
+                    layout: {}
+                }, {
+                    transition: { duration: 300, easing: "cubic-in-out" },
+                    frame: { duration: 300, redraw: true }
+                });
+            });
+        }
+
+        function findSimilarPatterns(selectedPattern, closePrices) {
+            let matches = [];
+            for (let i = 0; i < closePrices.length - selectedPattern.length; i++) {
+                let subPattern = closePrices.slice(i, i + selectedPattern.length);
+                let similarity = 0;
+
+                // Calculate similarity (absolute difference)
+                for (let j = 0; j < selectedPattern.length; j++) {
+                    similarity += Math.abs(selectedPattern[j] - subPattern[j]);
+                }
+
+                // If similarity is within threshold, mark as match
+                if (similarity / selectedPattern.length < 2) {
+                    matches.push(i);
+                }
+            }
+            return matches;
+        }
+
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+            const chartContainer = document.getElementById('chart-container');
+            if (!document.fullscreenElement) {
+                chartContainer.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('light-theme');
+            const isLightMode = document.body.classList.contains('light-theme');
+            document.getElementById('theme-toggle').innerText = isLightMode ? 'Switch to Dark Mode' : 'Switch to Light Mode';
+        });
+
+        loadCSVData();
+    </script>
+
+</body>
+</html>

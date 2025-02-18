@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Trading Chart</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2196f3;
+            --success-color: #26a69a;
+            --danger-color: #ef5350;
+            --dark-bg: #131722;
+            --dark-surface: #1e222d;
+            --toolbar-bg: #2a2e39;
+            --text-color: #d1d4dc;
+            --border-color: #363c4e;
+            --hover-bg: #363c4e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: var(--dark-surface);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .symbol-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 1rem;
+        }
+
+        .symbol-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .price-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .price {
+            font-weight: 600;
+        }
+
+        .change {
+            color: var(--success-color);
+        }
+
+        .change.negative {
+            color: var(--danger-color);
+        }
+
+        .toolbar {
+            background-color: var(--toolbar-bg);
+            padding: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .toolbar-group {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0 0.5rem;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .tool-button {
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tool-button:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .tool-button.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .timeframe-selector {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .timeframe-button {
+            padding: 0.25rem 0.75rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .timeframe-button:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .timeframe-button.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        #chart-container {
+            flex: 1;
+            position: relative;
+            background-color: var(--dark-surface);
+        }
+
+        #chart {
+            width: 100%;
+            height: calc(100vh - 110px);
+        }
+
+        .indicator-menu {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            background-color: var(--dark-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.5rem;
+            display: none;
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .indicator-menu.active {
+            display: block;
+        }
+
+        .indicator-list {
+            list-style: none;
+        }
+
+        .indicator-item {
+            padding: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .indicator-item:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .drawing-toolbar {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: var(--dark-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.5rem;
+            display: none;
+            z-index: 1000;
+        }
+
+        .drawing-toolbar.active {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .context-menu {
+            position: absolute;
+            background-color: var(--dark-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.5rem;
+            display: none;
+            z-index: 1000;
+        }
+
+        .context-menu.active {
+            display: block;
+        }
+
+        .context-menu-item {
+            padding: 0.5rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .context-menu-item:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="symbol-info">
+            <div class="symbol-name">ADANIPORTS</div>
+            <div class="price-info">
+                <span class="price">₹750.45</span>
+                <span class="change">+12.30 (1.67%)</span>
+            </div>
+        </div>
+        <div class="timeframe-selector">
+            <button class="timeframe-button">1m</button>
+            <button class="timeframe-button active">5m</button>
+            <button class="timeframe-button">15m</button>
+            <button class="timeframe-button">1h</button>
+            <button class="timeframe-button">4h</button>
+            <button class="timeframe-button">1D</button>
+            <button class="timeframe-button">1W</button>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="tool-button" id="indicators-btn">
+                <i class="fas fa-chart-line"></i>
+                Indicators
+            </button>
+            <button class="tool-button" id="drawing-btn">
+                <i class="fas fa-pen"></i>
+                Drawing
+            </button>
+        </div>
+        <div class="toolbar-group">
+            <button class="tool-button">
+                <i class="fas fa-camera"></i>
+            </button>
+            <button class="tool-button">
+                <i class="fas fa-expand"></i>
+            </button>
+        </div>
+        <div class="toolbar-group">
+            <button class="tool-button" id="settings-btn">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="chart-container">
+        <div id="chart"></div>
+    </div>
+
+    <div class="indicator-menu">
+        <div class="indicator-list">
+            <div class="indicator-item">
+                <i class="fas fa-wave-square"></i>
+                Moving Average
+            </div>
+            <div class="indicator-item">
+                <i class="fas fa-chart-line"></i>
+                RSI
+            </div>
+            <div class="indicator-item">
+                <i class="fas fa-chart-area"></i>
+                MACD
+            </div>
+            <div class="indicator-item">
+                <i class="fas fa-chart-bar"></i>
+                Bollinger Bands
+            </div>
+        </div>
+    </div>
+
+    <div class="drawing-toolbar">
+        <button class="tool-button">
+            <i class="fas fa-minus"></i>
+            Trend Line
+        </button>
+        <button class="tool-button">
+            <i class="fas fa-arrows-alt-h"></i>
+            Horizontal Line
+        </button>
+        <button class="tool-button">
+            <i class="fas fa-vector-square"></i>
+            Rectangle
+        </button>
+        <button class="tool-button">
+            <i class="fas fa-draw-polygon"></i>
+            Fibonacci
+        </button>
+    </div>
+
+    <div class="overlay"></div>
+
+    <script>
+        // Initialize variables for chart state
+        let chartData = {
+            dates: [],
+            openPrices: [],
+            highPrices: [],
+            lowPrices: [],
+            closePrices: [],
+            volumes: []
+        };
+        
+        let activeIndicators = new Set();
+        let activeDrawingTool = null;
+        let isDrawing = false;
+        let drawingPoints = [];
+
+        async function loadCSVData() {
+            try {
+                const response = await fetch("ADANIPORTS.csv");
+                const text = await response.text();
+                
+                const rows = text.split("\n").slice(1);
+                rows.forEach(row => {
+                    const cols = row.split(",");
+                    if (cols.length < 10) return;
+
+                    chartData.dates.push(cols[0].trim());
+                    chartData.openPrices.push(parseFloat(cols[4]));
+                    chartData.highPrices.push(parseFloat(cols[5]));
+                    chartData.lowPrices.push(parseFloat(cols[6]));
+                    chartData.closePrices.push(parseFloat(cols[8]));
+                    chartData.volumes.push(parseInt(cols[10]));
+                });
+
+                initializeChart();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function initializeChart() {
+            const candlestickTrace = {
+                x: chartData.dates,
+                open: chartData.openPrices,
+                high: chartData.highPrices,
+                low: chartData.lowPrices,
+                close: chartData.closePrices,
+                type: 'candlestick',
+                name: 'ADANIPORTS',
+                increasing: { line: { color: var(--success-color) } },
+                decreasing: { line: { color: var(--danger-color) } }
+            };
+
+            const volumeTrace = {
+                x: chartData.dates,
+                y: chartData.volumes,
+                type: 'bar',
+                name: 'Volume',
+                yaxis: 'y2',
+                marker: {
+                    color: chartData.closePrices.map((close, i) => 
+                        close >= chartData.openPrices[i] ? var(--success-color) : var(--danger-color)
+                    )
+                }
+            };
+
+            const layout = {
+                dragmode: 'zoom',
+                showlegend: false,
+                xaxis: {
+                    rangeslider: { visible: false },
+                    type: 'date',
+                    gridcolor: var(--border-color)
+                },
+                yaxis: {
+                    autorange: true,
+                    gridcolor: var(--border-color)
+                },
+                yaxis2: {
+                    overlaying: 'y',
+                    side: 'right',
+                    showgrid: false
+                },
+                plot_bgcolor: var(--dark-surface),
+                paper_bgcolor: var(--dark-surface),
+                margin: { r: 50, l: 50, t: 30, b: 30 }
+            };
+
+            const config = {
+                responsive: true,
+                scrollZoom: true,
+                modeBarButtonsToAdd: [
+                    'drawline',
+                    'drawopenpath',
+                    'drawclosedpath',
+                    'drawcircle',
+                    'drawrect',
+                    'eraseshape'
+                ]
+            };
+
+            Plotly.newPlot('chart', [candlestickTrace, volumeTrace], layout, config);
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Toolbar buttons
+            document.getElementById('indicators-btn').addEventListener('click', toggleIndicatorMenu);
+            document.getElementById('drawing-btn').addEventListener('click', toggleDrawingToolbar);
+            
+            // Timeframe buttons
+            document.querySelectorAll('.timeframe-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.querySelector('.timeframe-button.active').classList.remove('active');
+                    button.classList.add('active');
+                    updateTimeframe(button.textContent);
+                });
+            });
+
+            // Indicator menu items
+            document.querySelectorAll('.indicator-item').forEach(item => {
+                item.addEventListener('click', () => addIndicator(item.textContent.trim()));
+            });
+
+            // Drawing toolbar items
+            document.querySelectorAll('.drawing-toolbar .tool-button').forEach(button => {
+                button.addEventListener('click', () => setDrawingTool(button.textContent.trim()));
+            });
+
+            // Chart events
+            const chart = document.getElementById('chart');
+            chart.addEventListener('mousedown', startDrawing);
+            chart.addEventListener('mousemove', continueDraw);
+            chart.addEventListener('mouseup', endDrawing);
+            
+            // Close menus when clicking overlay
+            document.querySelector('.overlay').addEventListener('click', closeAllMenus);
+        }
+
+        function toggleIndicatorMenu() {
+            const menu = document.querySelector('.indicator-menu');
+            const overlay = document.querySelector('.overlay');
+            menu.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.querySelector('.drawing-toolbar').classList.remove('active');
+        }
+
+        function toggleDrawingToolbar() {
+            const toolbar = document.querySelector('.drawing-toolbar');
+            const overlay = document.querySelector('.overlay');
+            toolbar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.querySelector('.indicator-menu').classList.remove('active');
+        }
+
+       // Continue from previous JavaScript...
+
+       function closeAllMenus() {
+        document.querySelector('.indicator-menu').classList.remove('active');
+        document.querySelector('.drawing-toolbar').classList.remove('active');
+        document.querySelector('.overlay').classList.remove('active');
+    }
+
+    function addIndicator(indicatorName) {
+        if (activeIndicators.has(indicatorName)) return;
+        activeIndicators.add(indicatorName);
+
+        switch (indicatorName) {
+            case 'Moving Average':
+                addMovingAverage();
+                break;
+            case 'RSI':
+                addRSI();
+                break;
+            case 'MACD':
+                addMACD();
+                break;
+            case 'Bollinger Bands':
+                addBollingerBands();
+                break;
+        }
+        closeAllMenus();
+    }
+
+    function calculateSMA(data, period) {
+        const sma = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                sma.push(null);
+                continue;
+            }
+            const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+            sma.push(sum / period);
+        }
+        return sma;
+    }
+
+    function addMovingAverage() {
+        const sma20 = calculateSMA(chartData.closePrices, 20);
+        const sma50 = calculateSMA(chartData.closePrices, 50);
+
+        const sma20Trace = {
+            x: chartData.dates,
+            y: sma20,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'SMA 20',
+            line: { color: '#2962FF' }
+        };
+
+        const sma50Trace = {
+            x: chartData.dates,
+            y: sma50,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'SMA 50',
+            line: { color: '#FF6D00' }
+        };
+
+        Plotly.addTraces('chart', [sma20Trace, sma50Trace]);
+    }
+
+    function calculateRSI(prices, period = 14) {
+        const rsi = [];
+        let gains = [];
+        let losses = [];
+
+        // Calculate initial gains and losses
+        for (let i = 1; i < prices.length; i++) {
+            const difference = prices[i] - prices[i - 1];
+            gains.push(Math.max(difference, 0));
+            losses.push(Math.abs(Math.min(difference, 0)));
+        }
+
+        // Calculate RSI
+        for (let i = 0; i < prices.length; i++) {
+            if (i < period) {
+                rsi.push(null);
+                continue;
+            }
+
+            const avgGain = gains.slice(i - period, i).reduce((a, b) => a + b) / period;
+            const avgLoss = losses.slice(i - period, i).reduce((a, b) => a + b) / period;
+            
+            const rs = avgGain / avgLoss;
+            rsi.push(100 - (100 / (1 + rs)));
+        }
+
+        return rsi;
+    }
+
+    function addRSI() {
+        const rsiValues = calculateRSI(chartData.closePrices);
+        
+        const rsiTrace = {
+            x: chartData.dates,
+            y: rsiValues,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'RSI',
+            line: { color: '#E91E63' },
+            yaxis: 'y3'
+        };
+
+        const newLayout = {
+            yaxis3: {
+                title: 'RSI',
+                overlaying: 'y',
+                side: 'right',
+                position: 0.95,
+                range: [0, 100]
+            }
+        };
+
+        Plotly.addTraces('chart', [rsiTrace]);
+        Plotly.relayout('chart', newLayout);
+    }
+
+    function calculateMACD(prices) {
+        const ema12 = calculateEMA(prices, 12);
+        const ema26 = calculateEMA(prices, 26);
+        const macdLine = ema12.map((v, i) => v - ema26[i]);
+        const signalLine = calculateEMA(macdLine, 9);
+        const histogram = macdLine.map((v, i) => v - signalLine[i]);
+
+        return { macdLine, signalLine, histogram };
+    }
+
+    function calculateEMA(data, period) {
+        const ema = [];
+        const multiplier = 2 / (period + 1);
+
+        // Initialize EMA with SMA
+        const smaFirst = data.slice(0, period).reduce((a, b) => a + b) / period;
+        ema.push(smaFirst);
+
+        // Calculate EMA
+        for (let i = 1; i < data.length; i++) {
+            const value = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
+            ema.push(value);
+        }
+
+        return ema;
+    }
+
+    function addMACD() {
+        const macd = calculateMACD(chartData.closePrices);
+
+        const macdTrace = {
+            x: chartData.dates,
+            y: macd.macdLine,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'MACD',
+            line: { color: '#2962FF' },
+            yaxis: 'y4'
+        };
+
+        const signalTrace = {
+            x: chartData.dates,
+            y: macd.signalLine,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Signal',
+            line: { color: '#FF6D00' },
+            yaxis: 'y4'
+        };
+
+        const histogramTrace = {
+            x: chartData.dates,
+            y: macd.histogram,
+            type: 'bar',
+            name: 'Histogram',
+            marker: {
+                color: macd.histogram.map(v => v >= 0 ? '#26a69a' : '#ef5350')
+            },
+            yaxis: 'y4'
+        };
+
+        const newLayout = {
+            yaxis4: {
+                title: 'MACD',
+                overlaying: 'y',
+                side: 'right',
+                position: 0.95
+            }
+        };
+
+        Plotly.addTraces('chart', [macdTrace, signalTrace, histogramTrace]);
+        Plotly.relayout('chart', newLayout);
+    }
+
+    function calculateBollingerBands(prices, period = 20, multiplier = 2) {
+        const sma = calculateSMA(prices, period);
+        const upperBand = [];
+        const lowerBand = [];
+
+        for (let i = 0; i < prices.length; i++) {
+            if (i < period - 1) {
+                upperBand.push(null);
+                lowerBand.push(null);
+                continue;
+            }
+
+            const slice = prices.slice(i - period + 1, i + 1);
+            const std = Math.sqrt(slice.reduce((sum, x) => sum + Math.pow(x - sma[i], 2), 0) / period);
+            
+            upperBand.push(sma[i] + (multiplier * std));
+            lowerBand.push(sma[i] - (multiplier * std));
+        }
+
+        return { middle: sma, upper: upperBand, lower: lowerBand };
+    }
+
+    function addBollingerBands() {
+        const bands = calculateBollingerBands(chartData.closePrices);
+
+        const upperTrace = {
+            x: chartData.dates,
+            y: bands.upper,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Upper Band',
+            line: { color: '#7B1FA2' }
+        };
+
+        const middleTrace = {
+            x: chartData.dates,
+            y: bands.middle,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Middle Band',
+            line: { color: '#7B1FA2', dash: 'dash' }
+        };
+
+        const lowerTrace = {
+            x: chartData.dates,
+            y: bands.lower,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Lower Band',
+            line: { color: '#7B1FA2' },
+            fill: 'tonexty'
+        };
+
+        Plotly.addTraces('chart', [upperTrace, middleTrace, lowerTrace]);
+    }
+
+    function updateTimeframe(timeframe) {
+        // Simulate timeframe changes by resampling data
+        let factor;
+        switch (timeframe) {
+            case '1m': factor = 1; break;
+            case '5m': factor = 5; break;
+            case '15m': factor = 15; break;
+            case '1h': factor = 60; break;
+            case '4h': factor = 240; break;
+            case '1D': factor = 1440; break;
+            case '1W': factor = 10080; break;
+            default: factor = 1;
+        }
+        
+        // Resample data based on timeframe
+        const resampledData = resampleData(chartData, factor);
+        updateChartData(resampledData);
+    }
+
+    function resampleData(data, factor) {
+        // Implementation of data resampling based on timeframe
+        // This is a simplified version - in real implementation,
+        // you would need to properly aggregate OHLCV data
+        return data;
+    }
+
+    function updateChartData(newData) {
+        Plotly.update('chart', {
+            x: [newData.dates],
+            open: [newData.openPrices],
+            high: [newData.highPrices],
+            low: [newData.lowPrices],
+            close: [newData.closePrices]
+        });
+    }
+
+    // Drawing tools implementation
+    function setDrawingTool(tool) {
+        activeDrawingTool = tool;
+        isDrawing = false;
+        drawingPoints = [];
+        document.getElementById('chart').style.cursor = 'crosshair';
+    }
+
+    function startDrawing(e) {
+        if (!activeDrawingTool) return;
+        isDrawing = true;
+        const coordinates = getChartCoordinates(e);
+        drawingPoints = [coordinates];
+    }
+
+    function continueDraw(e) {
+        if (!isDrawing) return;
+        const coordinates = getChartCoordinates(e);
+        updateDrawing(coordinates);
+    }
+
+    function endDrawing(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        const coordinates = getChartCoordinates(e);
+        drawingPoints.push(coordinates);
+        finalizeDrawing();
+    }
+
+    function getChartCoordinates(e) {
+        const plotEl = document.getElementById('chart');
+        const rect = plotEl.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Convert pixel coordinates to chart coordinates
+        // This would require access to Plotly's internal conversion methods
+        // For now, we'll return approximate values
+        return { x, y };
+    }
+
+    function updateDrawing(coordinates) {
+        // Implementation of real-time drawing update
+        // This would depend on the specific drawing tool selected
+    }
+
+    function finalizeDrawing() {
+        // Implementation of drawing finalization
+        // This would add the shape permanently to the chart
+    }
+
+    // Initialize the chart
+    loadCSVData();
